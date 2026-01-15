@@ -38,4 +38,5 @@ type Upload struct {
 	SMBPassword string `json:"smbpassword"`
 	SMBHost     string `json:"smbhost"`
 	SMBShare    string `json:"smbshare"`
+	Domain    string `json:"domain"`
 }

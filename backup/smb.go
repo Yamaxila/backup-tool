@@ -32,6 +32,7 @@ func CleanupSMB(upload config.Upload, items []SMBItem) error {
 		Initiator: &smb2.NTLMInitiator{
 			User:     upload.SMBUser,
 			Password: upload.SMBPassword,
+			Domain:   upload.Domain,
 		},
 	}
 
@@ -119,7 +120,7 @@ func CleanupSMB(upload config.Upload, items []SMBItem) error {
 				if err := fs.Remove(fullPath); err != nil {
 					fmt.Printf("⚠️ Failed to delete %s on SMB: %v\n", fullPath, err)
 				} else {
-					fmt.Printf("🗑️ Deleted old backup on SMB: %s (age: %d days)\n", 
+					fmt.Printf("🗑️ Deleted old backup on SMB: %s (age: %d days)\n",
 						fullPath, int(now.Sub(backupTime).Hours()/24))
 					deletedCount++
 				}

@@ -38,6 +38,7 @@ func UploadToSMB(localPath string, upload config.Upload) error {
 		Initiator: &smb2.NTLMInitiator{
 			User:     upload.SMBUser,
 			Password: upload.SMBPassword,
+			Domain:   upload.Domain,
 		},
 	}
 
@@ -87,9 +88,9 @@ func UploadToSMB(localPath string, upload config.Upload) error {
 				}
 				// If error is not related to existence, check text (for cross-platform compatibility)
 				errStr := err.Error()
-				if !strings.Contains(errStr, "exists") && 
-				   !strings.Contains(errStr, "EEXIST") && 
-				   !strings.Contains(errStr, "file exists") {
+				if !strings.Contains(errStr, "exists") &&
+					!strings.Contains(errStr, "EEXIST") &&
+					!strings.Contains(errStr, "file exists") {
 					return fmt.Errorf("failed to create directory %s on SMB: %w", smbPath, err)
 				}
 			} else {
