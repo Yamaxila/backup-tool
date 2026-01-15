@@ -1,0 +1,30 @@
+[#] backup-tool.service
+[Unit]
+Description=Backup Tool - scheduled backups
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+
+# Path to project directory (adjust if you install binary elsewhere)
+WorkingDirectory=/home/yamaxila/projects/backupsProject
+
+# Load environment variables from .env file (if present)
+# This is in addition to the application's own .env loading.
+EnvironmentFile=-/home/yamaxila/projects/backupsProject/.env
+
+# Path to compiled binary (see README: go build -o backup-tool)
+ExecStart=/home/yamaxila/projects/backupsProject/backup-tool -config /home/yamaxila/projects/backupsProject/config.json
+
+# Safer defaults for backup jobs
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# Restart behavior (not really needed for oneshot, but harmless)
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
+

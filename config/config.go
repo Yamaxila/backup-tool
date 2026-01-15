@@ -5,7 +5,8 @@ type Config struct {
 	LocalBackupPath string            `json:"localBackupPath"`
 	Dirs            []Item            `json:"dirs"`
 	Files           []Item            `json:"files"`
-	DatabaseUsers   map[string]DBUser `json:"databaseUsers,omitempty"` // ← НОВОЕ
+	Logs            []Item            `json:"logs,omitempty"`
+	DatabaseUsers   map[string]DBUser `json:"databaseUsers,omitempty"`
 	Databases       []Database        `json:"databases"`
 	Upload          Upload            `json:"upload"`
 }
@@ -15,7 +16,7 @@ type Item struct {
 	Lifetime int    `json:"lifetime"`
 }
 
-// DBUser — общие параметры подключения
+// DBUser contains common database connection parameters
 type DBUser struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
@@ -23,11 +24,11 @@ type DBUser struct {
 	Port     int    `json:"port"`
 }
 
-// Database — теперь ссылается на userRef
+// Database now references userRef
 type Database struct {
 	Name     string `json:"name"`
 	Type     string `json:"type"`    // postgres, mysql, mongo
-	UserRef  string `json:"userRef"` // ← ссылка на ключ в DatabaseUsers
+	UserRef  string `json:"userRef"` // reference to key in DatabaseUsers
 	Lifetime int    `json:"lifetime"`
 }
 

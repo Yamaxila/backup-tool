@@ -12,20 +12,25 @@ import (
 	"backup-tool/config"
 )
 
+// BackupDatabases creates backups of databases and archives them into tar.gz files.
 func BackupDatabases(localPath string, dbs []config.Database, users map[string]config.DBUser) error {
 	for _, db := range dbs {
 		user, exists := users[db.UserRef]
 		if !exists {
-			return fmt.Errorf("не найден databaseUsers.%s для БД %s", db.UserRef, db.Name)
+			return fmt.Errorf("databaseUsers.%s not found for database %s", db.UserRef, db.Name)
 		}
 
-		archiveName := fmt.Sprintf("db_%s_%s.tar.gz", db.Name, time.Now().Format("20060102_150405"))
-		archivePath := filepath.Join(localPath, archiveName)
+		subDir, err := ensureBackupSubdir(localPath, "databases", db.Name)
+		if err != nil {
+			return fmt.Errorf("failed to create subdirectory for database %s: %w", db.Name, err)
+		}
 
-		// Временная директория для дампа
+		archiveName := fmt.Sprintf("db_%s.tar.gz", time.Now().Format("20060102_150405"))
+		archivePath := filepath.Join(subDir, archiveName)
+
 		tempDir, err := os.MkdirTemp("", "dbbackup-*")
 		if err != nil {
-			return fmt.Errorf("не удалось создать временную директорию: %w", err)
+			return fmt.Errorf("failed to create temporary directory: %w", err)
 		}
 		defer os.RemoveAll(tempDir)
 
@@ -35,27 +40,26 @@ func BackupDatabases(localPath string, dbs []config.Database, users map[string]c
 			cmd := exec.Command("pg_dump", "-h", user.Host, "-p", fmt.Sprint(user.Port), "-U", user.User, "-F", "t", "-f", tarFile, db.Name)
 			cmd.Env = append(cmd.Env, fmt.Sprintf("PGPASSWORD=%s", user.Password))
 			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("ошибка pg_dump для %s: %w", db.Name, err)
+				return fmt.Errorf("pg_dump error for %s: %w", db.Name, err)
 			}
-			// Упаковываем dump.tar в архив
 			if err := runTar(archivePath, tempDir, "dump.tar"); err != nil {
-				return fmt.Errorf("ошибка архивации PostgreSQL: %w", err)
+				return fmt.Errorf("error archiving PostgreSQL backup: %w", err)
 			}
 
 		case "mysql":
-			fullSqlPath := filepath.Join(tempDir, "dump.sql")
+			sqlFile := filepath.Join(tempDir, "dump.sql")
 			cmd := exec.Command("mysqldump",
 				"-h", user.Host,
 				"-P", fmt.Sprint(user.Port),
 				"-u", user.User,
 				"--password="+user.Password,
 				db.Name,
-				"--result-file", fullSqlPath)
+				"--result-file", sqlFile)
 			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("ошибка mysqldump для %s: %w", db.Name, err)
+				return fmt.Errorf("mysqldump error for %s: %w", db.Name, err)
 			}
 			if err := runTar(archivePath, tempDir, "dump.sql"); err != nil {
-				return fmt.Errorf("ошибка архивации MySQL: %w", err)
+				return fmt.Errorf("error archiving MySQL backup: %w", err)
 			}
 
 		case "mongo":
@@ -71,25 +75,23 @@ func BackupDatabases(localPath string, dbs []config.Database, users map[string]c
 				}
 			}
 			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("ошибка mongodump для %s: %w", db.Name, err)
+				return fmt.Errorf("mongodump error for %s: %w", db.Name, err)
 			}
-			// mongodump создаёт dump/<dbname>, но мы архивируем всю папку dump
 			if err := runTar(archivePath, tempDir, "dump"); err != nil {
-				return fmt.Errorf("ошибка архивации MongoDB: %w", err)
+				return fmt.Errorf("error archiving MongoDB backup: %w", err)
 			}
 
 		default:
-			return fmt.Errorf("неподдерживаемый тип БД: %s", db.Type)
+			return fmt.Errorf("unsupported database type: %s", db.Type)
 		}
 
-		fmt.Printf("✅ Бэкап БД %s → %s\n", db.Name, archivePath)
-		cleanupOldBackups(localPath, "db_"+db.Name, db.Lifetime)
+		// Verify that archive was actually created
+		if _, err := os.Stat(archivePath); os.IsNotExist(err) {
+			return fmt.Errorf("archive was not created: %s", archivePath)
+		}
+
+		fmt.Printf("✅ Database backup %s → %s\n", db.Name, archivePath)
+		cleanupOldBackups(subDir, "db_", db.Lifetime)
 	}
 	return nil
-}
-
-// runTar выполняет: tar -czf target.tar.gz -C baseDir entry
-func runTar(targetArchive, baseDir, entryName string) error {
-	cmd := exec.Command("tar", "-czf", targetArchive, "-C", baseDir, entryName)
-	return cmd.Run()
 }

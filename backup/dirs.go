@@ -4,36 +4,50 @@ package backup
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
 
 	"backup-tool/config"
 )
 
+// BackupDirs archives directories into tar.gz archives.
+// Creates structure: <localBackupPath>/dirs/<basename>/dir_YYYYMMDD_HHMMSS.tar.gz
 func BackupDirs(localPath string, items []config.Item) error {
 	for _, item := range items {
 		srcPath := item.Path
-
-		if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-			fmt.Printf("⚠️ Директория %s не существует — пропускаем\n", srcPath)
+		info, err := os.Stat(srcPath)
+		if os.IsNotExist(err) {
+			fmt.Printf("⚠️ Directory %s does not exist — skipping\n", srcPath)
 			continue
+		}
+		if err != nil {
+			return fmt.Errorf("error checking directory %s: %w", srcPath, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("%s is not a directory", srcPath)
 		}
 
 		baseName := filepath.Base(srcPath)
-		parentDir := filepath.Dir(srcPath)
-
-		archiveName := fmt.Sprintf("dir_%s_%s.tar.gz", baseName, time.Now().Format("20060102_150405"))
-		archivePath := filepath.Join(localPath, archiveName)
-
-		// Команда: tar -czf archive.tar.gz -C parentDir baseName
-		cmd := exec.Command("tar", "-czf", archivePath, "-C", parentDir, baseName)
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("ошибка архивации директории %s: %w", srcPath, err)
+		subDir, err := ensureBackupSubdir(localPath, "dirs", baseName)
+		if err != nil {
+			return fmt.Errorf("failed to create subdirectory for %s: %w", baseName, err)
 		}
 
-		fmt.Printf("✅ Директория %s → %s\n", srcPath, archivePath)
-		cleanupOldBackups(localPath, "dir_"+baseName, item.Lifetime)
+		archiveName := fmt.Sprintf("dir_%s.tar.gz", time.Now().Format("20060102_150405"))
+		archivePath := filepath.Join(subDir, archiveName)
+
+		parentDir := filepath.Dir(srcPath)
+		if err := runTar(archivePath, parentDir, baseName); err != nil {
+			return fmt.Errorf("error archiving directory %s: %w", srcPath, err)
+		}
+
+		// Verify that archive was actually created
+		if _, err := os.Stat(archivePath); os.IsNotExist(err) {
+			return fmt.Errorf("archive was not created: %s", archivePath)
+		}
+
+		fmt.Printf("✅ Directory %s → %s\n", srcPath, archivePath)
+		cleanupOldBackups(subDir, "dir_", item.Lifetime)
 	}
 	return nil
 }

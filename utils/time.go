@@ -1,17 +1,32 @@
-// Package utils
+// utils/time.go
 package utils
 
 import (
 	"os"
+	"path/filepath"
+	"regexp"
 	"time"
 )
 
-// IsOlderThanDays checks if file is older than N days
-func IsOlderThanDays(path string, days int) (bool, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false, err
+var timestampRegex = regexp.MustCompile(`_(\d{8}_\d{6})\.tar\.gz$`)
+
+func GetBackupTimeFromName(filename string) (time.Time, bool) {
+	matches := timestampRegex.FindStringSubmatch(filename)
+	if len(matches) < 2 {
+		return time.Time{}, false
 	}
-	cutoff := time.Now().AddDate(0, 0, -days)
-	return info.ModTime().Before(cutoff), nil
+	t, err := time.Parse("20060102_150405", matches[1])
+	return t, err == nil
+}
+
+func IsBackupOlderThan(fullPath string, days int) bool {
+	filename := filepath.Base(fullPath)
+	backupTime, ok := GetBackupTimeFromName(filename)
+	if !ok {
+		if info, err := os.Stat(fullPath); err == nil {
+			return info.ModTime().Before(time.Now().AddDate(0, 0, -days))
+		}
+		return false
+	}
+	return backupTime.Before(time.Now().AddDate(0, 0, -days))
 }

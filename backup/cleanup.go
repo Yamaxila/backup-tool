@@ -2,27 +2,35 @@
 package backup
 
 import (
-	"backup-tool/utils"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"backup-tool/utils"
 )
 
+// cleanupOldBackups removes old backup files based on their lifetime.
 func cleanupOldBackups(dir, prefix string, lifetime int) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		fmt.Printf("⚠️ Cleanup failed: %v\n", err)
+		fmt.Printf("⚠️ Failed to read %s: %v\n", dir, err)
 		return
 	}
 
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) {
-			path := filepath.Join(dir, entry.Name())
-			old, err := utils.IsOlderThanDays(path, lifetime)
-			if err == nil && old {
-				os.Remove(path)
-				fmt.Printf("🗑️ Deleted old backup: %s\n", path)
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, ".tar.gz") {
+			fullPath := filepath.Join(dir, name)
+			if utils.IsBackupOlderThan(fullPath, lifetime) {
+				if err := os.Remove(fullPath); err != nil {
+					fmt.Printf("❌ Failed to delete %s: %v\n", name, err)
+				} else {
+					fmt.Printf("🗑️ Deleted old backup: %s\n", name)
+				}
 			}
 		}
 	}
