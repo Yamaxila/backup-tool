@@ -1,0 +1,37 @@
+{
+  "localBackupPath": "/home/yamaxila/projects/b",
+  "databaseUsers": {
+    "main_pg": {
+      "user": "postgres",
+      "password": "postgres",
+      "host": "192.168.1.234",
+      "port": 5432
+    },
+    "local_mongo": {
+      "user": "",
+      "password": "",
+      "host": "localhost",
+      "port": 27017
+    }
+  },
+  "dirs": [
+    { "path": "/var/www", "lifetime": 7 }
+  ],
+  "files": [],
+  "databases": [
+    {
+      "name": "testdb",
+      "type": "postgres",
+      "userRef": "main_pg",
+      "lifetime": 30
+    }
+  ],
+  "upload": {
+    "active": false,
+    "smbuser": "domain\\user",
+    "smbpassword": "password",
+    "smbhost": "192.168.1.234",
+    "smbshare": "\\share"
+  }
+
+}

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>Генератор конфигурации бэкапа</title>
+    <style>
+        body { font-family: sans-serif; max-width: 900px; margin: 20px auto; padding: 0 15px; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input, select { width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box; }
+        button { margin-top: 8px; padding: 6px 12px; cursor: pointer; }
+        .section { border: 1px solid #ccc; padding: 15px; margin-top: 20px; border-radius: 6px; }
+        .item { background: #f9f9f9; padding: 12px; margin-top: 12px; border-radius: 5px; position: relative; }
+        .item h4 { margin: 0 0 8px 0; }
+        .remove-btn { position: absolute; top: 8px; right: 8px; }
+        pre { background: #eee; padding: 12px; overflow-x: auto; white-space: pre-wrap; border-radius: 4px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+<h1>Генератор конфигурации бэкапа</h1>
+
+<label>Локальный путь для бэкапов:
+    <input type="text" id="localBackupPath" value="/backups" />
+</label>
+
+<!-- Database Users -->
+<div class="section">
+    <h3>Учётные записи для баз данных</h3>
+    <div id="dbUsersContainer"></div>
+    <button type="button" onclick="addDBUser()">+ Добавить учётную запись</button>
+</div>
+
+<!-- Директории -->
+<div class="section">
+    <h3>Директории</h3>
+    <div id="dirsContainer"></div>
+    <button type="button" onclick="addDir()">+ Добавить директорию</button>
+</div>
+
+<!-- Базы данных -->
+<div class="section">
+    <h3>Базы данных</h3>
+    <div id="dbsContainer"></div>
+    <button type="button" onclick="addDB()">+ Добавить базу данных</button>
+</div>
+
+<!-- SMB Upload -->
+<div class="section">
+    <h3>Загрузка на SMB</h3>
+    <label>
+        Активировать:
+        <select id="uploadActive">
+            <option value="true">Да</option>
+            <option value="false" selected>Нет</option>
+        </select>
+    </label>
+    <label>SMB Host: <input type="text" id="smbHost" placeholder="192.168.1.234" /></label>
+    <label>SMB User: <input type="text" id="smbUser" placeholder="domain\\user" /></label>
+    <label>SMB Password: <input type="password" id="smbPassword" /></label>
+    <label>SMB Share: <input type="text" id="smbShare" placeholder="\\\\server\\share" /></label>
+</div>
+
+<button onclick="generateConfig()">Сгенерировать JSON</button>
+<pre id="output"></pre>
+
+<script>
+    // Инициализация
+    addDBUser();
+    addDir();
+    addDB();
+
+    function addDBUser() {
+        const container = document.getElementById('dbUsersContainer');
+        const div = document.createElement('div');
+        div.className = 'item';
+        const key = 'user_' + Date.now();
+        div.innerHTML = `
+        <label>Имя ссылки (например, prod_pg): <input type="text" value="${key}" /></label>
+        <div class="grid">
+          <label>Хост: <input type="text" value="localhost" /></label>
+          <label>Порт: <input type="number" class="port-input" value="5432" /></label>
+        </div>
+        <label>Пользователь: <input type="text" placeholder="backup_user" /></label>
+        <label>Пароль: <input type="password" placeholder="••••••" /></label>
+        <button type="button" class="remove-btn" onclick="this.parentElement.remove()">✕</button>
+      `;
+        container.appendChild(div);
+    }
+
+    function addDir() {
+        const container = document.getElementById('dirsContainer');
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `
+        <label>Путь: <input type="text" placeholder="/path/to/dir" /></label>
+        <label>Lifetime (дней): <input type="number" value="7" min="1" /></label>
+        <button type="button" class="remove-btn" onclick="this.parentElement.remove()">✕</button>
+      `;
+        container.appendChild(div);
+    }
+
+    function addDB() {
+        const container = document.getElementById('dbsContainer');
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `
+        <label>Имя БД: <input type="text" placeholder="mydb" /></label>
+        <label>Тип:
+          <select>
+            <option>postgres</option>
+            <option>mysql</option>
+            <option>mongo</option>
+          </select>
+        </label>
+        <label>Учётная запись:
+          <select class="user-ref-select">
+            <!-- заполнится динамически -->
+          </select>
+        </label>
+        <label>Lifetime (дней): <input type="number" value="30" min="1" /></label>
+        <button type="button" class="remove-btn" onclick="this.parentElement.remove()">✕</button>
+      `;
+        container.appendChild(div);
+        updateDBUserSelect(div.querySelector('.user-ref-select'));
+    }
+
+    function updateDBUserSelect(select) {
+        // Очистить
+        select.innerHTML = '';
+        // Заполнить из существующих учётных записей
+        document.querySelectorAll('#dbUsersContainer .item').forEach(item => {
+            const keyInput = item.querySelector('input[type="text"]');
+            const key = keyInput.value.trim();
+            if (key) {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.textContent = key;
+                select.appendChild(opt);
+            }
+        });
+    }
+
+    // Обновлять все выпадающие списки при изменении учётных записей
+    document.getElementById('dbUsersContainer').addEventListener('input', function(e) {
+        if (e.target.tagName === 'INPUT' && e.target.type === 'text') {
+            document.querySelectorAll('#dbsContainer .user-ref-select').forEach(sel => {
+                updateDBUserSelect(sel);
+            });
+        }
+    });
+
+    document.getElementById('dbUsersContainer').addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-btn')) {
+            setTimeout(() => {
+                document.querySelectorAll('#dbsContainer .user-ref-select').forEach(sel => {
+                    updateDBUserSelect(sel);
+                });
+            }, 10);
+        }
+    });
+
+    function generateConfig() {
+        const config = {
+            localBackupPath: document.getElementById('localBackupPath').value.trim() || "/backups",
+            databaseUsers: {},
+            dirs: [],
+            files: [],
+            databases: [],
+            upload: {
+                active: document.getElementById('uploadActive').value === 'true',
+                smbuser: document.getElementById('smbUser').value,
+                smbpassword: document.getElementById('smbPassword').value,
+                smbhost: document.getElementById('smbHost').value,
+                smbshare: document.getElementById('smbShare').value,
+            }
+        };
+
+        // Сбор databaseUsers
+        document.querySelectorAll('#dbUsersContainer .item').forEach(item => {
+            const inputs = item.querySelectorAll('input');
+            const key = inputs[0].value.trim();
+            if (!key) return;
+            const host = inputs[1].value.trim() || "localhost";
+            const port = parseInt(inputs[2].value) || 5432;
+            const user = inputs[3].value.trim();
+            const password = inputs[4].value;
+            config.databaseUsers[key] = { host, port, user, password };
+        });
+
+        // Директории
+        document.querySelectorAll('#dirsContainer .item').forEach(item => {
+            const path = item.querySelectorAll('input')[0].value.trim();
+            const lifetime = parseInt(item.querySelectorAll('input')[1].value) || 7;
+            if (path) config.dirs.push({ path, lifetime });
+        });
+
+        // Базы данных
+        document.querySelectorAll('#dbsContainer .item').forEach(item => {
+            const name = item.querySelectorAll('input')[0].value.trim();
+            const type = item.querySelector('select').value;
+            const userRef = item.querySelector('.user-ref-select').value;
+            const lifetime = parseInt(item.querySelectorAll('input')[1].value) || 30;
+            if (name && userRef) {
+                config.databases.push({ name, type, userRef, lifetime });
+            }
+        });
+
+        const jsonStr = JSON.stringify(config, null, 2);
+        const output = document.getElementById('output');
+        output.textContent = jsonStr;
+
+        // Кнопка скачивания
+        const existingLink = output.querySelector('a');
+        if (existingLink) existingLink.remove();
+
+        const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'backup-config.json';
+        a.textContent = '📥 Скачать backup-config.json';
+        a.style.display = 'inline-block';
+        a.style.marginTop = '10px';
+        a.style.textDecoration = 'none';
+        a.style.padding = '6px 10px';
+        a.style.background = '#4CAF50';
+        a.style.color = 'white';
+        a.style.borderRadius = '4px';
+        output.appendChild(document.createElement('br'));
+        output.appendChild(a);
+    }
+</script>
+</body>
+</html>
